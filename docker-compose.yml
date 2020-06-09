@@ -6,5 +6,3 @@ services:
     build:
       context: .
       dockerfile: WebTest/Dockerfile
-      ports:
-        - "5006:80"
