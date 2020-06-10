@@ -1,38 +1,21 @@
-﻿FROM jenkins
+﻿#See https://aka.ms/containerfastmode to understand how Visual Studio uses this Dockerfile to build your images for faster debugging.
 
-USER root
-#清除了基础镜像设置的源，切换成腾讯云的jessie源
-#使用非腾讯云环境的需要将 tencentyun 改为 aliyun
-RUN echo '' > /etc/apt/sources.list.d/jessie-backports.list \
- && echo "deb http://mirrors.tencentyun.com/debian jessie main contrib non-free" > /etc/apt/sources.list \
- && echo "deb http://mirrors.tencentyun.com/debian jessie-updates main contrib non-free" >> /etc/apt/sources.list \
- && echo "deb http://mirrors.tencentyun.com/debian-security jessie/updates main contrib non-free" >> /etc/apt/sources.list
-#更新源并安装缺少的包
-RUN apt-get update && apt-get install -y libltdl7 && apt-get update
+FROM mcr.microsoft.com/dotnet/core/aspnet:2.2-stretch-slim AS base
+WORKDIR /app
+EXPOSE 80
 
-ARG dockerGid=999
+FROM mcr.microsoft.com/dotnet/core/sdk:2.2-stretch AS build
+WORKDIR /src
+COPY ["WebTest/WebTest.csproj", "WebTest/"]
+RUN dotnet restore "WebTest/WebTest.csproj"
+COPY . .
+WORKDIR "/src/WebTest"
+RUN dotnet build "WebTest.csproj" -c Release -o /app/build
 
-RUN echo "docker:x:${dockerGid}:jenkins" >> /etc/group 
+FROM build AS publish
+RUN dotnet publish "WebTest.csproj" -c Release -o /app/publish
 
-# 安装 docker-compose 因为等下构建环境的需要
-RUN curl -L https://github.com/docker/compose/releases/download/1.16.1/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
-
-RUN chmod +x /usr/local/bin/docker-compose
-#
-#FROM docker.io/microsoft/dotnet:latest 
-#WORKDIR /app
-#EXPOSE 80
-#
-#FROM docker.io/microsoft/dotnet:latest
-#WORKDIR /src
-#COPY ["WebTest/WebTest.csproj", "WebTest/"]
-#RUN dotnet restore "WebTest/WebTest.csproj"
-#COPY . .
-#WORKDIR "/src/WebTest"
-#RUN dotnet build "WebTest.csproj" -c Release -o /app
-#
-#RUN dotnet publish "WebTest.csproj" -c Release -o /app
-#
-#WORKDIR /app
-#ENTRYPOINT ["dotnet", "WebTest.dll"]
-#
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+ENTRYPOINT ["dotnet", "WebTest.dll"]
